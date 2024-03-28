@@ -50,21 +50,19 @@ const processResponse = (responseBody, contentType, urlString) => {
 };
 
 const processSearchContent = (htmlContent, baseUrl) => {
-    let links = [];
     const $ = cheerio.load(htmlContent);
+    let uniqueLinks = new Set();
 
     $('a').each(function () {
         let link = $(this).attr('href');
         if (link && !link.startsWith('javascript:') && !link.startsWith('mailto:')) {
             link = new URL(link, baseUrl).toString();
-            links.push(link);
+            uniqueLinks.add(link);
         }
     });
 
-    links = [...new Set(links)].map(link => link.split('#'));
-
-    links.forEach((link, index) => {
-        index >= 13 && index <=22 && console.log(link);
+    Array.from(uniqueLinks).slice(13, 23).forEach((link) => {
+        console.log(link);
     });
 };
 
