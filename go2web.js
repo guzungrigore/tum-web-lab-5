@@ -2,16 +2,17 @@
 
 const {program} = require("commander");
 const https = require("https");
+const http = require("http");
 const cheerio = require("cheerio");
 let isSearching = false;
 
 const fetchContentFromUrl = (urlString) => {
     const url = new URL(urlString);
     let dataChunks = [];
-
-    const request = https.request({
+    const protocol = url.protocol === 'https:' ? https : http;
+    const request = protocol.request({
         hostname: url.hostname,
-        port: 443,
+        port: url.protocol === 'https:' ? 443 : 80,
         path: url.pathname + url.search,
         method: "GET",
         headers: {
@@ -24,8 +25,10 @@ const fetchContentFromUrl = (urlString) => {
 
         response.on("end", () => {
             const contentType = response.headers["content-type"];
+            const statusCode = response.statusCode;
+            const location = response.headers['location'];
             const fullResponse = Buffer.concat(dataChunks).toString();
-            processResponse(fullResponse, contentType, urlString);
+            processResponse(fullResponse, contentType, urlString,statusCode, location);
         });
     });
 
@@ -36,16 +39,21 @@ const fetchContentFromUrl = (urlString) => {
     request.end();
 };
 
-const processResponse = (responseBody, contentType, urlString) => {
-    if (isSearching) {
-        processSearchContent(responseBody, urlString);
-        isSearching = false
-        return
-    }
-    if (contentType.includes("text/html")) {
-        processHtmlContent(responseBody);
-    } else if (contentType.includes("application/json")) {
-        processJsonContent(responseBody);
+const processResponse = (responseBody, contentType, urlString, statusCode, location) => {
+    if ([301, 302, 307, 308].includes(statusCode) && location) {
+        console.log('Redirecting to ${location} (${statusCode})');
+        fetchContentFromUrl(location);
+    } else {
+        if (isSearching) {
+            processSearchContent(responseBody, urlString);
+            isSearching = false
+            return
+        }
+        if (contentType.includes("text/html")) {
+            processHtmlContent(responseBody);
+        } else if (contentType.includes("application/json")) {
+            processJsonContent(responseBody);
+        }
     }
 };
 
