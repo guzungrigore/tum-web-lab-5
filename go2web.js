@@ -1,7 +1,9 @@
 #!/usr/bin/env node
+
 const {program} = require("commander");
 const https = require("https");
 const cheerio = require("cheerio");
+let isSearching = false;
 
 const fetchContentFromUrl = (urlString) => {
     const url = new URL(urlString);
@@ -23,7 +25,7 @@ const fetchContentFromUrl = (urlString) => {
         response.on("end", () => {
             const contentType = response.headers["content-type"];
             const fullResponse = Buffer.concat(dataChunks).toString();
-            processResponse(fullResponse, contentType);
+            processResponse(fullResponse, contentType, urlString);
         });
     });
 
@@ -34,12 +36,36 @@ const fetchContentFromUrl = (urlString) => {
     request.end();
 };
 
-const processResponse = (responseBody, contentType) => {
+const processResponse = (responseBody, contentType, urlString) => {
+    if (isSearching) {
+        processSearchContent(responseBody, urlString);
+        isSearching = false
+        return
+    }
     if (contentType.includes("text/html")) {
         processHtmlContent(responseBody);
     } else if (contentType.includes("application/json")) {
         processJsonContent(responseBody);
     }
+};
+
+const processSearchContent = (htmlContent, baseUrl) => {
+    let links = [];
+    const $ = cheerio.load(htmlContent);
+
+    $('a').each(function () {
+        let link = $(this).attr('href');
+        if (link && !link.startsWith('javascript:') && !link.startsWith('mailto:')) {
+            link = new URL(link, baseUrl).toString();
+            links.push(link);
+        }
+    });
+
+    links = [...new Set(links)].map(link => link.split('#'));
+
+    links.forEach((link, index) => {
+        index >= 13 && index <=22 && console.log(link);
+    });
 };
 
 const processHtmlContent = (html) => {
@@ -68,6 +94,13 @@ const processJsonContent = (jsonText) => {
 const cleanTextContent = (text) => {
     return text.replace(/[ \t]+/g, " ").replace(/\n\s*\n\s*\n/g, "\n\n").trim();
 };
+
+const searchContent = (searchTerm) => {
+    const searchUrl = `https://www.bing.com/search?q=${searchTerm.toLowerCase()}`;
+    isSearching = true;
+    fetchContentFromUrl(searchUrl);
+};
+
 program
     .description("Web Request Command Line Tool")
     .option("-u, --url <URL>", "Fetch content from the specified URL")
@@ -76,7 +109,7 @@ program
         if (cmd.url) {
             fetchContentFromUrl(cmd.url)
         } else if (cmd.search) {
-            console.log(cmd.search)
+            searchContent(cmd.search)
         }
     });
 
