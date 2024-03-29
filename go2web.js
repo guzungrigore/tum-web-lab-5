@@ -4,12 +4,32 @@ const {program} = require("commander");
 const https = require("https");
 const http = require("http");
 const cheerio = require("cheerio");
+const fs = require("fs");
 let isSearching = false;
-
+let cleanedResponse;
 const fetchContentFromUrl = (urlString) => {
     const url = new URL(urlString);
+    let cacheBuffer;
     let dataChunks = [];
     const protocol = url.protocol === 'https:' ? https : http;
+    fs.readFile('cache.json', (err, data) => {
+        if (err) {
+            console.error(err);
+            return
+        }
+
+        try {
+            cacheBuffer = JSON.parse(data.toString());
+        } catch (error) {
+            cacheBuffer = {};
+        }
+
+        if (cacheBuffer.hasOwnProperty(urlString)) {
+            console.log('Process data from Cache')
+            console.log(cacheBuffer[urlString])
+            return
+        }
+
     const request = protocol.request({
         hostname: url.hostname,
         port: url.protocol === 'https:' ? 443 : 80,
@@ -29,6 +49,13 @@ const fetchContentFromUrl = (urlString) => {
             const location = response.headers['location'];
             const fullResponse = Buffer.concat(dataChunks).toString();
             processResponse(fullResponse, contentType, urlString,statusCode, location);
+            if (!cacheBuffer.hasOwnProperty(urlString)) {
+                cacheBuffer[urlString] = cleanedResponse;
+                fs.writeFile('cache.json', JSON.stringify(cacheBuffer), function (err) {
+                    if (err) throw err;
+                });
+                console.log('Data Cached')
+            }
         });
     });
 
@@ -37,7 +64,9 @@ const fetchContentFromUrl = (urlString) => {
     });
 
     request.end();
+    });
 };
+
 
 const processResponse = (responseBody, contentType, urlString, statusCode, location) => {
     if ([301, 302, 307, 308].includes(statusCode) && location) {
@@ -55,6 +84,7 @@ const processResponse = (responseBody, contentType, urlString, statusCode, locat
             processJsonContent(responseBody);
         }
     }
+
 };
 
 const processSearchContent = (htmlContent, baseUrl) => {
@@ -82,16 +112,16 @@ const processHtmlContent = (html) => {
     });
     $("style, script, iframe").remove();
 
-    const textContent = cleanTextContent($("body").text());
-    console.log(textContent);
+    cleanedResponse = cleanTextContent($("body").text());
+    console.log(cleanedResponse);
+
 };
 
 const processJsonContent = (jsonText) => {
     try {
         const jsonData = JSON.parse(jsonText);
-        console.log("Received JSON Response:");
-        const prettyJson = JSON.stringify(jsonData, null, 2);
-        console.log(prettyJson);
+        cleanedResponse = JSON.stringify(jsonData, null, 2);
+        console.log(cleanedResponse);
     } catch (error) {
         console.error("JSON Parsing Error:", error.message);
     }
