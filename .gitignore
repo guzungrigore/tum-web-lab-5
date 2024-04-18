@@ -5,3 +5,4 @@ npm-debug.log.*
 /.awcache/*
 /.cache-loader/*
 .idea
+cache.json
